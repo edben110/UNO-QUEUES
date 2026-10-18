@@ -69,6 +69,10 @@ export class TerminalInterface {
       const t = s.pendingDraw.topType === 'WILD_DRAW4' ? '+4' : '+2';
       lines.push(`ROBO PENDIENTE: +${s.pendingDraw.amount} (ultimo: ${t}). Apila con +4 o roba [d]`);
     }
+    if (s.status === 'FINISHED') {
+      const winner = (s.players || []).find((p) => p.id === s.winnerId);
+      lines.push(`*** GANADOR: ${winner ? winner.name : s.winnerId} ***`);
+    }
     lines.push('');
     lines.push('Jugadores:');
     (s.players || []).forEach((p) => {
@@ -94,6 +98,9 @@ export class TerminalInterface {
     if (this.awaitingColor) {
       lines.push('Elige color: r=rojo  b=azul  g=verde  y=amarillo');
       lines.push('  (o escribe "cancel" para anular la jugada)');
+    } else if (s.status === 'FINISHED') {
+      lines.push('Partida terminada. Espera a que el host empiece otra.');
+      lines.push('Otros: p=jugadores  s=salir');
     } else {
       lines.push('Escribe el NUMERO de una carta para jugarla.');
       lines.push('Otros: d=robar  u=uno  p=jugadores  s=salir');

@@ -145,3 +145,57 @@ test('_refillDeck recicla el descarte cuando el mazo se vacia', () => {
   assert.equal(game.deck.cards.length, 2);
   assert.equal(game.discardPile.length, 1);
 });
+
+test('UNO automatico: al quedar con 1 carta se asigna solo', () => {
+  const top = new Card({ type: 'NUMBER', color: 'RED', value: 5 });
+  const game = setupGame(3, top);
+  const p1 = game.players.get('p1');
+  const num = new Card({ type: 'NUMBER', color: 'RED', value: 7 });
+  p1.hand = [num]; // juega su unica carta -> queda con 0? no, necesita 2 para quedar con 1
+  // darle 2 cartas: una jugable y otra que quede en mano
+  const play = new Card({ type: 'NUMBER', color: 'RED', value: 7 });
+  const keep = new Card({ type: 'NUMBER', color: 'BLUE', value: 1 });
+  p1.hand = [play, keep];
+  game.playCard('p1', play.id, null);
+  assert.equal(p1.hand.length, 1);
+  assert.equal(p1.unoAnnounced, true, 'UNO debe asignarse automaticamente');
+});
+
+test('Victoria: al jugar la ultima carta el juego termina', () => {
+  const top = new Card({ type: 'NUMBER', color: 'RED', value: 5 });
+  const game = setupGame(3, top);
+  const p1 = game.players.get('p1');
+  const last = new Card({ type: 'NUMBER', color: 'RED', value: 9 });
+  p1.hand = [last];
+  game.playCard('p1', last.id, null);
+  assert.equal(p1.hand.length, 0);
+  assert.equal(game.status, 'FINISHED');
+  assert.equal(game.winnerId, 'p1');
+});
+
+test('resetForNewRound limpia el estado y vuelve a WAITING', () => {
+  const top = new Card({ type: 'NUMBER', color: 'RED', value: 5 });
+  const game = setupGame(3, top);
+  const p1 = game.players.get('p1');
+  const last = new Card({ type: 'NUMBER', color: 'RED', value: 9 });
+  p1.hand = [last];
+  game.playCard('p1', last.id, null);
+  assert.equal(game.status, 'FINISHED');
+  game.resetForNewRound();
+  assert.equal(game.status, 'WAITING');
+  assert.equal(game.winnerId, null);
+  assert.equal(game.pendingDraw, null);
+  for (const p of game.players.values()) {
+    assert.equal(p.hand.length, 0);
+    assert.equal(p.unoAnnounced, false);
+  }
+  // el mazo vuelve a tener cartas y hay carta superior
+  assert.ok(game.deck.count() > 0);
+  assert.equal(game.discardPile.length, 1);
+  // tras reset + start se reparten 7 cartas
+  game.start();
+  assert.equal(game.status, 'STARTED');
+  for (const p of game.players.values()) {
+    assert.equal(p.hand.length, 7);
+  }
+});

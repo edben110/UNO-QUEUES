@@ -88,6 +88,10 @@ class HostInterface {
 
     if (s.status === 'WAITING') {
       lines.push('Esperando jugadores. Minimo 2 para iniciar.');
+    } else if (s.status === 'FINISHED') {
+      const winner = (s.players || []).find((p) => p.id === s.winnerId);
+      lines.push(`*** GANADOR: ${winner ? winner.name : s.winnerId} ***`);
+      lines.push('La partida termino. Pulsa [i] para empezar otra partida.');
     } else {
       lines.push('Tu mano:');
       const h = this.hand;
@@ -108,6 +112,8 @@ class HostInterface {
     if (this.awaitingColor) {
       lines.push('Elige color: r=rojo  b=azul  g=verde  y=amarillo');
       lines.push('  (o "cancel" para anular)');
+    } else if (s.status === 'FINISHED') {
+      lines.push('Comandos: i=otra partida  p=jugadores  s=salir');
     } else {
       if (s.status === 'WAITING') {
         lines.push('Comandos: i=iniciar partida  p=ver jugadores  s=salir');
@@ -217,17 +223,21 @@ class HostInterface {
 
   async _start() {
     try {
-      if (this.server.game.status !== 'WAITING') {
-        this.setMessage('ERROR', 'La partida ya esta iniciada');
+      const g = this.server.game;
+      if (g.status === 'STARTED') {
+        this.setMessage('ERROR', 'La partida ya esta en curso');
         this.render();
         return;
       }
-      if (this.server.game.players.size < 2) {
+      if (g.status === 'FINISHED') {
+        g.resetForNewRound();
+      }
+      if (g.players.size < 2) {
         this.setMessage('ERROR', 'Se necesitan al menos 2 jugadores');
         this.render();
         return;
       }
-      this.server.game.start();
+      g.start();
       this.setMessage('OK', 'Partida iniciada');
       await this.broadcast();
     } catch (e) {

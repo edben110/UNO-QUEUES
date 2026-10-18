@@ -62,6 +62,7 @@ export class Game {
       currentPlayerId: this.turnManager.getCurrentPlayer()?.id || null,
       direction: this.turnManager.direction,
       pendingDraw: this.pendingDraw,
+      winnerId: this.winnerId,
     };
   }
 
@@ -128,7 +129,8 @@ export class Game {
       this.status = 'FINISHED';
       this.winnerId = playerId;
     }
-    player.unoAnnounced = (player.hand.length === 1) ? player.unoAnnounced : false;
+    // UNO automatico: al quedar con 1 carta se asigna solo
+    player.unoAnnounced = player.hand.length === 1;
     return { success: true };
   }
 
@@ -193,5 +195,20 @@ export class Game {
 
   isDuplicateRequest(requestId, windowMs = 5000) {
     return this._requestIdMap.has(requestId);
+  }
+
+  resetForNewRound() {
+    this.deck = new Deck();
+    this.discardPile = [];
+    this._initialTopCardSetup();
+    this.pendingDraw = null;
+    this.winnerId = null;
+    this.currentColor = this.discardPile[0].color;
+    for (const p of this.players.values()) {
+      p.hand = [];
+      p.unoAnnounced = false;
+    }
+    this.turnManager = new TurnManager(Array.from(this.players.values()));
+    this.status = 'WAITING';
   }
 }

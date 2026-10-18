@@ -97,7 +97,13 @@ Comodines piden color (`r/b/g/y` o `cancel`). Tu mano privada solo se muestra en
 
 Cuando hay un robo pendiente, la terminal muestra `ROBO PENDIENTE: +N`. El comando `d` roba ese acumulado y pierde el turno.
 
-## 7. Pruebas
+## 7. UNO, victoria y reinicio
+
+- **UNO automático:** cuando un jugador se queda con **1 carta**, el juego le asigna UNO automáticamente (no hace falta pulsar nada). El jugador aparece con `uno: si` en la lista.
+- **Victoria:** al jugar esa última carta (quedarse con **0 cartas**), el jugador gana y el estado pasa a `FINISHED`. Todas las terminales muestran `*** GANADOR: <nombre> ***`.
+- **Otra partida:** cuando el juego termina, el host puede pulsar `i` para **empezar otra partida** con los mismos jugadores. El mazo, las manos y el descarte se reinician y se reparten 7 cartas nuevas. Los clientes solo esperan a que el host inicie la nueva ronda.
+
+## 8. Pruebas
 
 ```powershell
 npm test
