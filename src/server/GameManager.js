@@ -22,6 +22,8 @@ export class GameManager {
         return this._handleDraw(msg);
       case MSG_TYPES.ANNOUNCE_UNO:
         return this._handleUno(msg);
+      case MSG_TYPES.GET_HAND:
+        return this._handleGetHand(msg);
       case MSG_TYPES.PING:
         return MessageProtocol.create(MSG_TYPES.PONG, msg.gameId, msg.playerId, {});
       default:
@@ -35,20 +37,21 @@ export class GameManager {
       const playerId = msg.playerId || generateId('p');
       let joined = false;
       if (!this.game.players.has(playerId)) {
+        if (this.game.status !== 'WAITING') {
+          return MessageProtocol.create(MSG_TYPES.ACTION_RESULT, this.game.gameId, playerId, {
+            success: false,
+            error: 'La partida ya esta en curso',
+          });
+        }
         const player = new Player(playerId, playerName || playerId);
         this.game.addPlayer(player);
         joined = true;
-      }
-      // auto-start when >=2 players and waiting
-      if (this.game.status === 'WAITING' && this.game.players.size >= 2) {
-        try {
-          this.game.start();
-        } catch (e) {}
       }
       return MessageProtocol.create(MSG_TYPES.ACTION_RESULT, this.game.gameId, playerId, {
         success: true,
         playerId,
         joined,
+        hand: this.game.getPlayerHand(playerId),
         gameState: this.game.getStatePublic(),
       });
     } catch (e) {
@@ -66,6 +69,7 @@ export class GameManager {
       const res = this.game.playCard(msg.playerId, cardId, chosenColor);
       return MessageProtocol.create(MSG_TYPES.ACTION_RESULT, this.game.gameId, msg.playerId, {
         success: res.success,
+        hand: this.game.getPlayerHand(msg.playerId),
         gameState: this.game.getStatePublic(),
       });
     } catch (e) {
@@ -79,6 +83,7 @@ export class GameManager {
       return MessageProtocol.create(MSG_TYPES.ACTION_RESULT, this.game.gameId, msg.playerId, {
         success: res.success,
         drawn: res.drawn,
+        hand: this.game.getPlayerHand(msg.playerId),
         gameState: this.game.getStatePublic(),
       });
     } catch (e) {
@@ -92,10 +97,22 @@ export class GameManager {
       return MessageProtocol.create(MSG_TYPES.ACTION_RESULT, this.game.gameId, msg.playerId, {
         success: res.success,
         reason: res.reason,
+        hand: this.game.getPlayerHand(msg.playerId),
         gameState: this.game.getStatePublic(),
       });
     } catch (e) {
       return MessageProtocol.create(MSG_TYPES.ERROR, this.game.gameId, msg.playerId, { error: e.message });
     }
+  }
+
+  _handleGetHand(msg) {
+    const playerId = msg.playerId;
+    if (!this.game.players.has(playerId)) {
+      return MessageProtocol.create(MSG_TYPES.ERROR, this.game.gameId, playerId, { error: 'PLAYER_NOT_FOUND' });
+    }
+    return MessageProtocol.create(MSG_TYPES.PLAYER_HAND, this.game.gameId, playerId, {
+      hand: this.game.getPlayerHand(playerId),
+      gameState: this.game.getStatePublic(),
+    });
   }
 }

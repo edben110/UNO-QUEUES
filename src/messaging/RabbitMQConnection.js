@@ -10,10 +10,12 @@ export class RabbitMQConnection {
     this.reconnectAttempts = 0;
     this.maxReconnectAttempts = config.maxReconnectAttempts || 5;
     this.reconnectDelay = config.reconnectDelay || 2000;
+    this.closing = false;
   }
 
   async connect() {
     if (this.connected && this.connection) return this.connection;
+    this.closing = false;
     try {
       this.connection = await amqp.connect(this.url);
       this.channel = await this.connection.createChannel();
@@ -21,7 +23,7 @@ export class RabbitMQConnection {
       this.reconnectAttempts = 0;
       this.connection.on('close', () => {
         this.connected = false;
-        this._scheduleReconnect();
+        if (!this.closing) this._scheduleReconnect();
       });
       this.connection.on('error', (err) => {
         console.error('AMQP connection error:', err.message);
@@ -34,6 +36,7 @@ export class RabbitMQConnection {
   }
 
   async disconnect() {
+    this.closing = true;
     if (this.channel) {
       try { await this.channel.close(); } catch (e) {}
     }

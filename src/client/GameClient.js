@@ -1,12 +1,13 @@
-import readline from 'readline';
+import { EventEmitter } from 'events';
 import { RabbitMQConnection } from '../messaging/RabbitMQConnection.js';
 import { QueueManager } from '../messaging/QueueManager.js';
 import { MessageProtocol, MSG_TYPES } from '../messaging/MessageProtocol.js';
 import { generateId } from '../utils/validators.js';
-import { getLocalIp, buildRabbitUrl } from '../config/configuration.js';
+import { buildRabbitUrl } from '../config/configuration.js';
 
-export class GameClient {
+export class GameClient extends EventEmitter {
   constructor(config = {}) {
+    super();
     this.gameId = config.gameId || process.env.GAME_ID;
     this.hostRabbitHost = config.hostRabbitHost || process.env.RABBITMQ_HOST;
     this.playerId = config.playerId || generateId('p');
@@ -17,6 +18,9 @@ export class GameClient {
     this.eventExchange = `uno.events.${this.gameId}`;
     this.replyQueue = `uno.player.${this.playerId}`;
     this.state = null;
+    this.hand = [];
+    this.lastMessage = null;
+    this.connected = false;
   }
 
   async connect() {
@@ -28,55 +32,86 @@ export class GameClient {
     const evtQ = await this.qm.assertQueue('', { exclusive: true });
     await this.qm.bindQueue(evtQ, this.eventExchange, '');
     this._listen(evtQ);
+    this.connected = true;
     this.sendJoin();
   }
 
-  _listen() {
-    this.qm.consume(this.replyQueue, (msg) => {
-      if (msg && (msg.type === MSG_TYPES.GAME_STATE || (msg.payload && msg.payload.state))) {
-        this.state = msg.payload.state || msg.state;
+  _handleIncoming(msg) {
+    if (!msg) return;
+    let updated = false;
+
+    if (msg.type === MSG_TYPES.GAME_STATE) {
+      const s = msg.payload && msg.payload.state;
+      if (s) {
+        this.state = s;
+        updated = true;
       }
-      if (msg && msg.type === MSG_TYPES.ACTION_RESULT) {
-        if (msg.payload && msg.payload.error) {
-          console.log('[ERROR]', msg.payload.error);
-        } else {
-          console.log('[OK]', msg.payload && msg.payload.success ? 'success' : 'done');
-        }
-        if (msg.payload && msg.payload.gameState) {
-          this.state = msg.payload.gameState;
-        }
+    }
+
+    if (msg.type === MSG_TYPES.PLAYER_HAND) {
+      if (msg.payload && msg.payload.hand) this.hand = msg.payload.hand;
+      if (msg.payload && msg.payload.gameState) this.state = msg.payload.gameState;
+      updated = true;
+    }
+
+    if (msg.type === MSG_TYPES.ACTION_RESULT) {
+      const p = msg.payload || {};
+      if (p.gameState) {
+        this.state = p.gameState;
+        updated = true;
       }
-      if (msg && msg.type === MSG_TYPES.ERROR) {
-        console.log('[ERROR]', (msg.payload && msg.payload.error) || 'unknown');
+      if (p.hand) {
+        this.hand = p.hand;
+        updated = true;
       }
-    }, { noAck: true });
-    // listen to fanout events
-    this.qm.consume('', async (msg) => {
-      if (msg && (msg.type === MSG_TYPES.GAME_STATE || (msg.payload && msg.payload.state))) {
-        this.state = msg.payload.state || msg.state;
+      if (p.error) {
+        this.lastMessage = { type: 'ERROR', text: p.error };
+      } else {
+        this.lastMessage = { type: 'OK', text: p.success ? 'Accion realizada' : 'Listo' };
       }
-    }, { noAck: true });
-    // bind event queue? simpler: create temp queue and bind to event exchange
+      updated = true;
+    }
+
+    if (msg.type === MSG_TYPES.ERROR) {
+      this.lastMessage = { type: 'ERROR', text: (msg.payload && msg.payload.error) || 'Error desconocido' };
+      updated = true;
+    }
+
+    if (updated) {
+      this.emit('update');
+    }
+  }
+
+  _listen(evtQ) {
+    this.qm.consume(this.replyQueue, (msg) => this._handleIncoming(msg), { noAck: true });
+    if (evtQ) {
+      this.qm.consume(evtQ, (msg) => this._handleIncoming(msg), { noAck: true });
+    }
+  }
+
+  _send(type, payload = {}) {
+    const m = MessageProtocol.create(type, this.gameId, this.playerId, payload);
+    return this.qm.publish('', this.commandQueue, m);
   }
 
   async sendJoin() {
-    const join = MessageProtocol.create(MSG_TYPES.JOIN_GAME, this.gameId, this.playerId, { playerName: this.playerName });
-    await this.qm.publish('', this.commandQueue, join);
+    return this._send(MSG_TYPES.JOIN_GAME, { playerName: this.playerName });
   }
 
   async playCard(cardId, chosenColor = null) {
-    const play = MessageProtocol.create(MSG_TYPES.PLAY_CARD, this.gameId, this.playerId, { cardId, chosenColor });
-    await this.qm.publish('', this.commandQueue, play);
+    return this._send(MSG_TYPES.PLAY_CARD, { cardId, chosenColor });
   }
 
   async drawCard() {
-    const draw = MessageProtocol.create(MSG_TYPES.DRAW_CARD, this.gameId, this.playerId, {});
-    await this.qm.publish('', this.commandQueue, draw);
+    return this._send(MSG_TYPES.DRAW_CARD, {});
   }
 
   async announceUno() {
-    const uno = MessageProtocol.create(MSG_TYPES.ANNOUNCE_UNO, this.gameId, this.playerId, {});
-    await this.qm.publish('', this.commandQueue, uno);
+    return this._send(MSG_TYPES.ANNOUNCE_UNO, {});
+  }
+
+  async requestHand() {
+    return this._send(MSG_TYPES.GET_HAND, {});
   }
 
   getState() {

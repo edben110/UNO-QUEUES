@@ -18,6 +18,15 @@ export class GameServer {
     this.commandQueue = `uno.cmd.${this.gameId}`;
     this.eventExchange = `uno.events.${this.gameId}`;
     this.replyQueue = `uno.reply.${this.hostId}`;
+    this.onUpdate = null;
+  }
+
+  _notifyUpdate() {
+    if (typeof this.onUpdate === 'function') {
+      try {
+        this.onUpdate();
+      } catch (e) {}
+    }
   }
 
   async start() {
@@ -42,13 +51,15 @@ export class GameServer {
         const notification = MessageProtocol.create(MSG_TYPES.GAME_STATE, this.game.gameId, null, { state });
         await this.qm.publish(this.eventExchange, '', notification);
       } catch (e) {}
+      this._notifyUpdate();
     }, { noAck: true });
   }
 
-  broadcastState() {
+  async broadcastState() {
     const state = this.game.getStatePublic();
     const notification = MessageProtocol.create(MSG_TYPES.GAME_STATE, this.game.gameId, null, { state });
-    return this.qm.publish(this.eventExchange, '', notification);
+    await this.qm.publish(this.eventExchange, '', notification);
+    this._notifyUpdate();
   }
 
   getGameId() {
