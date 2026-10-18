@@ -25,20 +25,38 @@ export class GameClient {
     await this.qm.assertExchange(this.eventExchange, 'fanout', { durable: false });
     await this.qm.assertQueue(this.replyQueue, { exclusive: true });
     await this.qm.assertQueue(this.commandQueue, { durable: false });
-    this._listen();
+    const evtQ = await this.qm.assertQueue('', { exclusive: true });
+    await this.qm.bindQueue(evtQ, this.eventExchange, '');
+    this._listen(evtQ);
     this.sendJoin();
   }
 
   _listen() {
     this.qm.consume(this.replyQueue, (msg) => {
-      if (msg.type === MSG_TYPES.GAME_STATE || (msg.payload && msg.payload.state)) {
-        this.state = msg.payload.state;
+      if (msg && (msg.type === MSG_TYPES.GAME_STATE || (msg.payload && msg.payload.state))) {
+        this.state = msg.payload.state || msg.state;
       }
-      if (msg.type === MSG_TYPES.ACTION_RESULT || msg.type === MSG_TYPES.ERROR) {
-        console.log('[' + msg.type + ']', JSON.stringify(msg.payload));
+      if (msg && msg.type === MSG_TYPES.ACTION_RESULT) {
+        if (msg.payload && msg.payload.error) {
+          console.log('[ERROR]', msg.payload.error);
+        } else {
+          console.log('[OK]', msg.payload && msg.payload.success ? 'success' : 'done');
+        }
+        if (msg.payload && msg.payload.gameState) {
+          this.state = msg.payload.gameState;
+        }
+      }
+      if (msg && msg.type === MSG_TYPES.ERROR) {
+        console.log('[ERROR]', (msg.payload && msg.payload.error) || 'unknown');
       }
     }, { noAck: true });
-    this.qm.consume('', async () => {}, { noAck: true }); // placeholder
+    // listen to fanout events
+    this.qm.consume('', async (msg) => {
+      if (msg && (msg.type === MSG_TYPES.GAME_STATE || (msg.payload && msg.payload.state))) {
+        this.state = msg.payload.state || msg.state;
+      }
+    }, { noAck: true });
+    // bind event queue? simpler: create temp queue and bind to event exchange
   }
 
   async sendJoin() {

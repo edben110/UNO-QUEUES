@@ -1,5 +1,5 @@
-import { QueueManager } from './QueueManager.js';
-import { MessageProtocol, MSG_TYPES } from './MessageProtocol.js';
+import { MessageProtocol, MSG_TYPES } from '../messaging/MessageProtocol.js';
+import { Player } from '../game/Player.js';
 import { generateId } from '../utils/validators.js';
 
 export class GameManager {
@@ -33,11 +33,22 @@ export class GameManager {
     try {
       const { playerName } = msg.payload || {};
       const playerId = msg.playerId || generateId('p');
-      const player = { id: playerId, name: playerName || playerId };
-      this.game.addPlayer(player);
+      let joined = false;
+      if (!this.game.players.has(playerId)) {
+        const player = new Player(playerId, playerName || playerId);
+        this.game.addPlayer(player);
+        joined = true;
+      }
+      // auto-start when >=2 players and waiting
+      if (this.game.status === 'WAITING' && this.game.players.size >= 2) {
+        try {
+          this.game.start();
+        } catch (e) {}
+      }
       return MessageProtocol.create(MSG_TYPES.ACTION_RESULT, this.game.gameId, playerId, {
         success: true,
         playerId,
+        joined,
         gameState: this.game.getStatePublic(),
       });
     } catch (e) {

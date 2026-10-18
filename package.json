@@ -1,1 +1,21 @@
-{"name":"uno.js","version":"1.0.0","description":"Multiplayer UNO game over RabbitMQ in terminal","main":"src/client/index.js","type":"module","scripts":{"start:host":"node src/server/host.js","start:client":"node src/client/index.js","test":"node --test","lint":"echo \"no lint configured\"","typecheck":"echo \"no typecheck configured\""},"dependencies":{"amqplib":"^0.10.9"},"bin":{"uno-host":"src/server/host.js","uno-client":"src/client/index.js"}}
+{
+  "name": "uno.js",
+  "version": "1.0.0",
+  "description": "Multiplayer UNO game over RabbitMQ in terminal",
+  "main": "src/client/index.js",
+  "type": "module",
+  "scripts": {
+    "start:host": "node src/server/host.js",
+    "start:client": "node src/client/index.js",
+    "test": "node --test",
+    "lint": "echo \"no lint configured\"",
+    "typecheck": "echo \"no typecheck configured\""
+  },
+  "dependencies": {
+    "amqplib": "^0.10.9"
+  },
+  "bin": {
+    "uno-host": "src/server/host.js",
+    "uno-client": "src/client/index.js"
+  }
+}

@@ -4,7 +4,7 @@ import { MessageProtocol, MSG_TYPES } from '../messaging/MessageProtocol.js';
 import { Game } from '../game/Game.js';
 import { Player } from '../game/Player.js';
 import { generateId } from '../utils/validators.js';
-import GameManager from './GameManager.js';
+import { GameManager } from './GameManager.js';
 
 export class GameServer {
   constructor(config = {}) {
@@ -36,6 +36,12 @@ export class GameServer {
       if (resp && msg.playerId) {
         await this.qm.publish('', `uno.player.${msg.playerId}`, resp);
       }
+      // broadcast state after every action
+      try {
+        const state = this.game.getStatePublic();
+        const notification = MessageProtocol.create(MSG_TYPES.GAME_STATE, this.game.gameId, null, { state });
+        await this.qm.publish(this.eventExchange, '', notification);
+      } catch (e) {}
     }, { noAck: true });
   }
 
