@@ -36,21 +36,30 @@ Desde la terminal donde correrá el servidor/juego anfitrión:
 npm run start:host
 ```
 
-El anfitrión te pedirá un nombre y mostrará:
+El anfitrión te pedirá un nombre. A partir de ahí verás un tablero dinámico que se redibuja solo:
 - Game ID (identificador de la partida)
 - IP LAN del host
-- Instrucciones para que los clientes se conecten
+- Lista de jugadores conectados (con su número de cartas)
+- Tu mano y menú de acciones
 
-Ejemplo de salida:
-```text
-Host name: HostUno
-[HOST] Game game-xxx started...
-=== HOST READY ===
-Game ID: game-xxx
-RabbitMQ (AMQP): 192.168.1.50:5672
-```
+El host permanece abierto mientras se juega y ve en tiempo real cuando otros jugadores se unen o actúan.
 
-El host debe permanecer abierto mientras se juega.
+### Menú del host
+
+Cuando la partida está en espera (WAITING):
+- `i` / `iniciar` - Iniciar la partida (necesitas al menos 2 jugadores)
+- `p` / `jugadores` / `estado` - Refrescar vista
+- `s` / `salir` - Salir
+
+Durante la partida:
+- Escribe el **número** de una carta de tu mano para jugarla
+- `d` / `robar` - Robar una carta
+- `u` / `uno` - Anunciar UNO
+- `i` / `iniciar` - (solo en espera)
+- `p` / `estado` - Refrescar vista
+- `s` / `salir` - Salir
+
+Si juegas un comodín (WILD / WILD4), te pedirá elegir color: `r` (rojo), `b` (azul), `g` (verde), `y` (amarillo), o `cancel` para anular.
 
 ## 4. Conectar clientes
 
@@ -63,26 +72,37 @@ $env:GAME_ID="game-xxx"            # Game ID mostrado por host
 npm run start:client
 ```
 
-El cliente pedirá: Game ID (o usa env), RabbitMQ host (o usa env), y tu nombre.
+El cliente pedirá: Game ID (o usa env), RabbitMQ host (o usa env), y tu nombre. Luego muestra tu tablero dinámico.
 
-## 5. Comandos del cliente
+## 5. Menú del cliente
 
-Una vez conectado, puedes escribir comandos en la terminal:
+Una vez conectado verás tu tablero (se redibuja solo con los cambios de todos). El menú es el mismo que el del host, pero sin `iniciar`:
 
-- `state` - Muestra estado público: jugadores, cartas en mano (resumido), turno actual, color activo, carta superior, dirección
-- `players` / `list` - Lista jugadores con su turno (quién va primero/actual/siguiente)
-- `hand` - Muestra tu mano completa con IDs de carta
-- `draw` - Robar una carta
-- `play <cardId> [COLOR]` - Jugar carta. Si es comodín (WILD/WILD4), indica color: `RED|BLUE|GREEN|YELLOW`
-- `uno` - Anunciar UNO (cuando tengas 1 carta)
-- `ping` - Comprobar conexión
-- `quit`/`exit` - Salir
+- Escribe el **número** de una carta de tu mano para jugarla
+- `d` / `robar` - Robar una carta
+- `u` / `uno` - Anunciar UNO
+- `p` / `estado` - Refrescar vista
+- `s` / `salir` - Salir
 
-## 6. Pruebas
+Comodines piden color (`r/b/g/y` o `cancel`). Tu mano privada solo se muestra en tu terminal, nunca se envía a la cola pública.
+
+## 6. Reglas de cartas de acción (con apilamiento)
+
+- **+2 (DRAW2):** el siguiente jugador acumula +2 robo. Puede **apilar** con otro +2 o con un +4, o **robar** el acumulado y perder el turno.
+- **+4 (WILD_DRAW4):** el siguiente acumula +4 y el jugador elige el color. Solo se puede apilar con otro +4.
+- **Regla de apilamiento:** un +2 se puede responder con +2 o +4; pero una vez en la mesa un +4, **solo** se responde con +4. Cada carta de robo suma su valor al acumulado.
+- **Escape forzado:** con un robo pendiente, el jugador solo puede apilar con la carta de robo válida o robar el acumulado; no puede jugar una carta normal aunque coincida en color/número.
+- **SALTO (SKIP):** salta el turno del siguiente jugador.
+- **CAMBIO (REVERSE):** invierte el sentido del juego. Con 2 jugadores actúa como SALTO (sigue el mismo jugador).
+
+Cuando hay un robo pendiente, la terminal muestra `ROBO PENDIENTE: +N`. El comando `d` roba ese acumulado y pierde el turno.
+
+## 7. Pruebas
 
 ```powershell
 npm test
 ```
+Ejecuta pruebas unitarias de lógica de juego y una prueba de integración (host + 2 clientes sincronizados) si RabbitMQ está disponible.
 
 ## Notas de red
 

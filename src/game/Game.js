@@ -15,8 +15,7 @@ export class Game {
     this.currentColor = null;
     this.status = 'WAITING'; // WAITING, STARTED, FINISHED
     this.winnerId = null;
-    this.draw2Stack = 0;
-    this.draw4Stack = 0;
+    this.pendingDraw = null; // { amount, topType: 'DRAW2' | 'WILD_DRAW4' }
     this.pendingWildColor = false;
     this._requestIdMap = new Map();
     this.addPlayer(hostPlayer);
@@ -62,8 +61,7 @@ export class Game {
       currentColor: this.currentColor,
       currentPlayerId: this.turnManager.getCurrentPlayer()?.id || null,
       direction: this.turnManager.direction,
-      draw2Stack: this.draw2Stack,
-      draw4Stack: this.draw4Stack,
+      pendingDraw: this.pendingDraw,
     };
   }
 
@@ -81,8 +79,15 @@ export class Game {
     const card = player.hand.find((c) => c.id === cardId);
     if (!card) throw new Error('CARD_NOT_FOUND');
     const topCard = this.discardPile[this.discardPile.length - 1];
-    if (!this.rules.canPlay(card, topCard, this.currentColor)) {
-      throw new Error('INVALID_PLAY');
+    if (this.pendingDraw) {
+      // Forzado: con robo pendiente solo se puede apilar con carta de robo valida
+      if (!this.rules.canStackResponse(card, this.pendingDraw.topType)) {
+        throw new Error('INVALID_PLAY');
+      }
+    } else {
+      if (!this.rules.canPlay(card, topCard, this.currentColor)) {
+        throw new Error('INVALID_PLAY');
+      }
     }
     // remove card
     player.removeCard(cardId);
@@ -91,20 +96,31 @@ export class Game {
     // handle effects
     if (card.type === 'REVERSE') {
       this.turnManager.reverse();
-    }
-    if (card.type === 'SKIP') {
+      if (this.players.size > 2) {
+        this.turnManager.advanceToNext();
+      }
+      // con 2 jugadores reverse = skip: mismo jugador continua
+    } else if (card.type === 'SKIP') {
+      this.turnManager.advanceToNext(); // mover al jugador que es saltado
+      this.turnManager.advanceToNext(); // saltarlo
+    } else if (card.type === 'DRAW2') {
+      if (this.pendingDraw) {
+        this.pendingDraw.amount += 2;
+        // topType sigue siendo DRAW2
+      } else {
+        this.pendingDraw = { amount: 2, topType: 'DRAW2' };
+      }
       this.turnManager.advanceToNext();
-    }
-    if (card.type === 'DRAW2') {
-      this.draw2Stack += 2;
+    } else if (card.type === 'WILD_DRAW4') {
+      if (this.pendingDraw) {
+        this.pendingDraw.amount += 4;
+        this.pendingDraw.topType = 'WILD_DRAW4';
+      } else {
+        this.pendingDraw = { amount: 4, topType: 'WILD_DRAW4' };
+      }
       this.turnManager.advanceToNext();
-    }
-    if (card.type === 'WILD_DRAW4') {
-      this.draw4Stack += 4;
-      this.turnManager.advanceToNext();
-    }
-    if (card.type === 'NUMBER' || card.type === 'WILD') {
-      // advance normally
+    } else {
+      // NUMBER, WILD: avanzar normalmente
       this.turnManager.advanceToNext();
     }
     // check win
@@ -116,17 +132,45 @@ export class Game {
     return { success: true };
   }
 
+  _drawFromDeck(n) {
+    const cards = [];
+    for (let i = 0; i < n; i++) {
+      if (this.deck.cards.length === 0) {
+        this._refillDeck();
+      }
+      const drawn = this.deck.draw(1);
+      if (drawn.length === 0) break;
+      cards.push(...drawn);
+    }
+    return cards;
+  }
+
+  _refillDeck() {
+    if (this.discardPile.length <= 1) return; // nada que reciclar (se conserva la carta superior)
+    const top = this.discardPile.pop();
+    const toRecycle = this.discardPile.splice(0, this.discardPile.length);
+    for (const c of toRecycle) {
+      this.deck.addToTop(c);
+    }
+    this.deck.shuffle();
+    this.discardPile.push(top);
+  }
+
   drawCard(playerId) {
     if (!this.turnManager.isValidTurn(playerId)) {
       throw new Error('NOT_YOUR_TURN');
     }
     const player = this.players.get(playerId);
     if (!player) throw new Error('PLAYER_NOT_FOUND');
-    const cards = this.deck.draw(1);
+    let count = 1;
+    if (this.pendingDraw) {
+      count = this.pendingDraw.amount;
+      this.pendingDraw = null;
+    }
+    const cards = this._drawFromDeck(count);
     if (cards.length > 0) {
       player.addCards(cards);
     }
-    // after drawing, player can play? implementation choice: turn passes by default? simple: advance
     player.unoAnnounced = false;
     this.turnManager.advanceToNext();
     return { success: true, drawn: cards.length };

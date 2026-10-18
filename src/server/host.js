@@ -70,6 +70,10 @@ class HostInterface {
 
     lines.push(`Carta activa: ${topLabel} | Color: ${COLOR_LABELS[s.currentColor] || s.currentColor}`);
     lines.push(`Turno: ${turnPlayer ? turnPlayer.name : '-'}${myTurn ? '  <== TU TURNO' : ''}`);
+    if (s.pendingDraw) {
+      const t = s.pendingDraw.topType === 'WILD_DRAW4' ? '+4' : '+2';
+      lines.push(`ROBO PENDIENTE: +${s.pendingDraw.amount} (ultimo: ${t}). Apila con +4 o roba [d]`);
+    }
     lines.push('');
     lines.push('Jugadores:');
     if ((s.players || []).length === 0) {

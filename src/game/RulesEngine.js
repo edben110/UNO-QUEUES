@@ -18,4 +18,12 @@ export class RulesEngine {
     }
     return false;
   }
+
+  canStackResponse(card, pendingTopType) {
+    // +4 siempre puede apilar (sobre +2 o sobre +4)
+    if (card.type === 'WILD_DRAW4') return true;
+    // +2 solo puede apilar sobre +2
+    if (card.type === 'DRAW2' && pendingTopType === 'DRAW2') return true;
+    return false;
+  }
 }

@@ -65,6 +65,10 @@ export class TerminalInterface {
     lines.push(`Partida: ${s.gameId} | Estado: ${s.status} | Sentido: ${s.direction === 1 ? 'normal' : 'inverso'}`);
     lines.push(`Carta activa: ${topLabel} | Color: ${COLOR_LABELS[s.currentColor] || s.currentColor}`);
     lines.push(`Turno: ${turnPlayer ? turnPlayer.name : '-'}${myTurn ? '  <== TU TURNO' : ''}`);
+    if (s.pendingDraw) {
+      const t = s.pendingDraw.topType === 'WILD_DRAW4' ? '+4' : '+2';
+      lines.push(`ROBO PENDIENTE: +${s.pendingDraw.amount} (ultimo: ${t}). Apila con +4 o roba [d]`);
+    }
     lines.push('');
     lines.push('Jugadores:');
     (s.players || []).forEach((p) => {
