@@ -112,12 +112,12 @@ En **cada** otro equipo (con el proyecto copiado y `npm install` hecho), define 
 
 ```powershell
 # IP LAN del anfitrión (paso 4)
-$env:RABBITMQ_HOST="192.168.56.1"
+$env:RABBITMQ_HOST="192.168.175.106"
 # Usuario y contraseña creados en el paso 2
 $env:RABBITMQ_USER="juega"
 $env:RABBITMQ_PASS="password123"
 # Game ID mostrado por el host
-$env:GAME_ID="game-a1b2c3"
+$env:GAME_ID="game-mvfp4h1u-39bf7s"
 
 npm run start:client
 ```

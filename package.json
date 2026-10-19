@@ -12,7 +12,8 @@
     "typecheck": "echo \"no typecheck configured\""
   },
   "dependencies": {
-    "amqplib": "^0.10.9"
+    "amqplib": "^0.10.9",
+    "dotenv": "^18.0.8"
   },
   "bin": {
     "uno-host": "src/server/host.js",
