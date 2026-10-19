@@ -19,6 +19,9 @@ export class RabbitMQConnection {
     try {
       this.connection = await amqp.connect(this.url);
       this.channel = await this.connection.createChannel();
+      this.channel.on('error', (err) => {
+        console.error('AMQP channel error:', err.message);
+      });
       this.connected = true;
       this.reconnectAttempts = 0;
       this.connection.on('close', () => {

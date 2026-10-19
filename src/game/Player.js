@@ -6,6 +6,7 @@ export class Player {
     this.unoAnnounced = false;
     this.active = true;
     this.lastActionTimestamp = Date.now();
+    this.timeouts = 0; // timeouts de turno consecutivos
   }
 
   addCards(cards) {

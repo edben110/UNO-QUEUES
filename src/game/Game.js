@@ -18,6 +18,11 @@ export class Game {
     this.pendingDraw = null; // { amount, topType: 'DRAW2' | 'WILD_DRAW4' }
     this.pendingWildColor = false;
     this._requestIdMap = new Map();
+    this.turnSeq = 0; // se incrementa en cada cambio de turno (lo usa el temporizador)
+    this.turnDeadline = null; // timestamp ms limite del turno actual (lo fija el servidor)
+    this.turnTimeoutMs = null;
+    this.endReason = null;
+    this.onBeforeState = null; // gancho del servidor para sincronizar el temporizador
     this.addPlayer(hostPlayer);
     this._initialTopCardSetup();
   }
@@ -49,10 +54,15 @@ export class Game {
       p.addCards(this.deck.draw(7));
     }
     this.status = 'STARTED';
+    this.endReason = null;
+    this.turnSeq++;
     this.turnManager.setPlayers(Array.from(this.players.values()));
+    const cur = this.turnManager.getCurrentPlayer();
+    if (cur && !cur.active) this.turnManager.advanceToNext();
   }
 
   getStatePublic() {
+    if (typeof this.onBeforeState === 'function') this.onBeforeState();
     return {
       gameId: this.gameId,
       status: this.status,
@@ -63,6 +73,10 @@ export class Game {
       direction: this.turnManager.direction,
       pendingDraw: this.pendingDraw,
       winnerId: this.winnerId,
+      turnDeadline: this.turnDeadline,
+      turnTimeoutMs: this.turnTimeoutMs,
+      serverTime: Date.now(),
+      endReason: this.endReason,
     };
   }
 
@@ -97,7 +111,7 @@ export class Game {
     // handle effects
     if (card.type === 'REVERSE') {
       this.turnManager.reverse();
-      if (this.players.size > 2) {
+      if (this.turnManager.activeCount() > 2) {
         this.turnManager.advanceToNext();
       }
       // con 2 jugadores reverse = skip: mismo jugador continua
@@ -131,6 +145,8 @@ export class Game {
     }
     // UNO automatico: al quedar con 1 carta se asigna solo
     player.unoAnnounced = player.hand.length === 1;
+    player.timeouts = 0;
+    this.turnSeq++;
     return { success: true };
   }
 
@@ -174,7 +190,9 @@ export class Game {
       player.addCards(cards);
     }
     player.unoAnnounced = false;
+    player.timeouts = 0;
     this.turnManager.advanceToNext();
+    this.turnSeq++;
     return { success: true, drawn: cards.length };
   }
 
@@ -197,7 +215,57 @@ export class Game {
     return this._requestIdMap.has(requestId);
   }
 
+  // Marca a un jugador como presente/ausente sin romper la partida.
+  // Ausente en partida: conserva su asiento (puede volver) y el turno pasa al siguiente.
+  setPlayerActive(playerId, active) {
+    const player = this.players.get(playerId);
+    if (!player) return false;
+    const wasActive = player.active;
+    player.active = active;
+    player.timeouts = 0;
+    if (active) player.lastActionTimestamp = Date.now();
+    this.turnManager.setActive(playerId, active);
+    if (!active && wasActive && this.status === 'STARTED') {
+      if (this.turnManager.getCurrentPlayer()?.id === playerId) {
+        // el robo pendiente iba dirigido a quien se fue
+        this.pendingDraw = null;
+        this.turnManager.advanceToNext();
+        this.turnSeq++;
+      }
+      this._checkAbandonment();
+    }
+    return true;
+  }
+
+  // Quita a un jugador antes de empezar (nunca al host).
+  removePlayer(playerId) {
+    if (this.status === 'STARTED' || playerId === this.hostId) return false;
+    const removed = this.players.delete(playerId);
+    if (removed) this.turnManager.setPlayers(Array.from(this.players.values()));
+    return removed;
+  }
+
+  activePlayers() {
+    return Array.from(this.players.values()).filter((p) => p.active);
+  }
+
+  // Si queda menos de 2 jugadores activos la ronda termina sin bloquearse.
+  _checkAbandonment() {
+    if (this.status !== 'STARTED') return;
+    const alive = this.activePlayers();
+    if (alive.length >= 2) return;
+    this.status = 'FINISHED';
+    this.winnerId = alive.length === 1 ? alive[0].id : null;
+    this.endReason = 'ABANDONED';
+    this.pendingDraw = null;
+    this.turnSeq++;
+  }
+
   resetForNewRound() {
+    for (const [id, p] of Array.from(this.players.entries())) {
+      if (!p.active && id !== this.hostId) this.players.delete(id);
+    }
+    this.endReason = null;
     this.deck = new Deck();
     this.discardPile = [];
     this._initialTopCardSetup();

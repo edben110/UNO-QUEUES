@@ -9,8 +9,11 @@ export class GameManager {
 
   handleMessage(msg) {
     if (!MessageProtocol.validate(msg)) {
-      return MessageProtocol.create(MSG_TYPES.ERROR, msg.gameId, msg.playerId, { error: 'INVALID_MESSAGE' });
+      return MessageProtocol.create(MSG_TYPES.ERROR, msg?.gameId, msg?.playerId, { error: 'INVALID_MESSAGE' });
     }
+    // cualquier mensaje es señal de vida
+    const sender = msg.playerId ? this.game.players.get(msg.playerId) : null;
+    if (sender) sender.lastActionTimestamp = Date.now();
     switch (msg.type) {
       case MSG_TYPES.JOIN_GAME:
         return this._handleJoin(msg);
@@ -36,7 +39,12 @@ export class GameManager {
       const { playerName } = msg.payload || {};
       const playerId = msg.playerId || generateId('p');
       let joined = false;
-      if (!this.game.players.has(playerId)) {
+      const existing = this.game.players.get(playerId);
+      if (existing) {
+        // reconexion: recupera el asiento
+        existing.lastActionTimestamp = Date.now();
+        if (!existing.active) this.game.setPlayerActive(playerId, true);
+      } else {
         if (this.game.status !== 'WAITING') {
           return MessageProtocol.create(MSG_TYPES.ACTION_RESULT, this.game.gameId, playerId, {
             success: false,
@@ -60,6 +68,14 @@ export class GameManager {
   }
 
   _handleLeave(msg) {
+    const player = this.game.players.get(msg.playerId);
+    if (player) {
+      if (this.game.status === 'WAITING' && msg.playerId !== this.game.hostId) {
+        this.game.removePlayer(msg.playerId);
+      } else {
+        this.game.setPlayerActive(msg.playerId, false);
+      }
+    }
     return MessageProtocol.create(MSG_TYPES.ACTION_RESULT, this.game.gameId, msg.playerId, { success: true });
   }
 

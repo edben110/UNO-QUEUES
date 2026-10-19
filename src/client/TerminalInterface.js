@@ -13,7 +13,7 @@ function cardLabel(card, index) {
   if (card.type === 'NUMBER') return `${index}) ${color} ${card.value}`;
   if (card.type === 'SKIP') return `${index}) ${color} SALTO`;
   if (card.type === 'REVERSE') return `${index}) ${color} CAMBIO`;
-  if (card.type === 'DRAW2') return `${color} ROBA2`;
+  if (card.type === 'DRAW2') return `${index}) ${color} ROBA2`;
   if (card.type === 'WILD') return `${index}) COMODIN`;
   if (card.type === 'WILD_DRAW4') return `${index}) COMODIN ROBA4`;
   return `${index}) ${card.type}`;

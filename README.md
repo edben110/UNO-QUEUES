@@ -116,3 +116,11 @@ Ejecuta pruebas unitarias de lógica de juego y una prueba de integración (host
 - El puerto 5672 debe estar accesible desde clientes al host de RabbitMQ.
 - Revisa firewall de Windows si hay problemas de conexión.
 - Usa la IP LAN real (no 127.0.0.1) si clientes están en otros equipos.
+
+
+## Interfaz web, desconexiones y limite de turno
+
+- `npm run start:host` levanta el host con interfaz web. Abre `http://localhost:3000` (anfitrion) y los demas `http://<IP-del-host>:3000` desde el navegador (movil o PC). `npm run start:host:cli` conserva el host por terminal.
+- `npm run start:client` (companeros): pide Game ID y la IP de RabbitMQ del host (o los toma del `.env`), abre el navegador en `http://localhost:3000` y ahi juegan; habla con el host por RabbitMQ igual que antes. Tambien pueden saltarse esto y abrir directamente `http://<IP-del-host>:3000`. La version de terminal es `npm run start:client:cli`.
+- Cada turno dura `TURN_TIMEOUT_MS` (10 s por defecto). Si se agota, el servidor roba carta(s) por ti y pasa el turno; tras 3 seguidos quedas fuera hasta pulsar "Volver a jugar".
+- Si un jugador se desconecta o sale, la partida continua sin el; si queda un solo jugador activo la ronda termina y gana. Recargar la pestaña te devuelve a tu asiento.

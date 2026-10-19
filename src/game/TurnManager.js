@@ -3,12 +3,12 @@ export class TurnManager {
     this.players = players.slice();
     this.currentIndex = 0;
     this.direction = 1; // +1 forward, -1 reverse
-    this.activePlayerIds = new Set(this.players.map((p) => p.id));
+    this.activePlayerIds = new Set(this.players.filter((p) => p.active !== false).map((p) => p.id));
   }
 
   setPlayers(players) {
     this.players = players.slice();
-    this.activePlayerIds = new Set(this.players.map((p) => p.id));
+    this.activePlayerIds = new Set(this.players.filter((p) => p.active !== false).map((p) => p.id));
     if (this.currentIndex >= this.players.length) {
       this.currentIndex = 0;
     }
@@ -51,6 +51,10 @@ export class TurnManager {
     } else {
       this.activePlayerIds.delete(playerId);
     }
+  }
+
+  activeCount() {
+    return this.activePlayerIds.size;
   }
 
   isValidTurn(playerId) {

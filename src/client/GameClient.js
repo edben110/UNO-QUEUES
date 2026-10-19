@@ -21,6 +21,7 @@ export class GameClient extends EventEmitter {
     this.hand = [];
     this.lastMessage = null;
     this.connected = false;
+    this._pingTimer = null;
   }
 
   async connect() {
@@ -31,9 +32,32 @@ export class GameClient extends EventEmitter {
     await this.qm.assertQueue(this.commandQueue, { durable: false });
     const evtQ = await this.qm.assertQueue('', { exclusive: true });
     await this.qm.bindQueue(evtQ, this.eventExchange, '');
-    this._listen(evtQ);
+    await this._listen(evtQ);
     this.connected = true;
-    this.sendJoin();
+    await this.sendJoin();
+    this._pingTimer = setInterval(() => this.ping(), 3000);
+    this._pingTimer.unref?.();
+  }
+
+  ping() {
+    if (!this.connected) return;
+    this._send(MSG_TYPES.PING, {}).catch(() => {});
+  }
+
+  async leave() {
+    if (!this.connected) return;
+    try {
+      await this._send(MSG_TYPES.LEAVE_GAME, {});
+    } catch (e) {}
+  }
+
+  // Cierra la conexion. announce=true avisa al servidor que sales; con false
+  // el servidor te marca ausente por falta de latido (permite recargar sin perder el asiento).
+  async stop(announce = true) {
+    if (this._pingTimer) clearInterval(this._pingTimer);
+    if (announce) await this.leave();
+    this.connected = false;
+    await this.rabbit.disconnect();
   }
 
   _handleIncoming(msg) {
@@ -82,10 +106,10 @@ export class GameClient extends EventEmitter {
     }
   }
 
-  _listen(evtQ) {
-    this.qm.consume(this.replyQueue, (msg) => this._handleIncoming(msg), { noAck: true });
+  async _listen(evtQ) {
+    await this.qm.consume(this.replyQueue, (msg) => this._handleIncoming(msg), { noAck: true });
     if (evtQ) {
-      this.qm.consume(evtQ, (msg) => this._handleIncoming(msg), { noAck: true });
+      await this.qm.consume(evtQ, (msg) => this._handleIncoming(msg), { noAck: true });
     }
   }
 
